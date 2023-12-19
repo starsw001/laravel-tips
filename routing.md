@@ -1,12 +1,14 @@
 ## Routing
 
-⬆️ [Go to main menu](README.md#laravel-tips) ⬅️ [Previous (Views)](Views.md) ➡️ [Next (Validation)](Validation.md)
+⬆️ [Go to main menu](README.md#laravel-tips) ⬅️ [Previous (Views)](views.md) ➡️ [Next (Validation)](validation.md)
 
 - [Route group within a group](#route-group-within-a-group)
+- [Declare a resolveRouteBinding method in your Model](#declare-a-resolveroutebinding-method-in-your-model)
+- [assign withTrashed() to Route::resource() method](#assign-withtrashed-to-routeresource-method)
+- [Skip Input Normalization](#skip-input-normalization)
 - [Wildcard subdomains](#wildcard-subdomains)
 - [What's behind the routes?](#whats-behind-the-routes)
 - [Route Model Binding: You can define a key](#route-model-binding-you-can-define-a-key)
-- [Quickly Navigate from Routes file to Controller](#quickly-navigate-from-routes-file-to-controller)
 - [Route Fallback: When no Other Route is Matched](#route-fallback-when-no-other-route-is-matched)
 - [Route Parameters Validation with RegExp](#route-parameters-validation-with-regexp)
 - [Rate Limiting: Global and for Guests/Users](#rate-limiting-global-and-for-guestsusers)
@@ -14,20 +16,25 @@
 - [Separate Routes by Files](#separate-routes-by-files)
 - [Translate Resource Verbs](#translate-resource-verbs)
 - [Custom Resource Route Names](#custom-resource-route-names)
-- [More Readable Route List](#more-readable-route-list)
 - [Eager load relationship](#eager-load-relationship)
 - [Localizing Resource URIs](#localizing-resource-uris)
 - [Resource Controllers naming](#resource-controllers-naming)
 - [Easily highlight your navbar menus](#easily-highlight-your-navbar-menus)
 - [Generate absolute path using route() helper](#generate-absolute-path-using-route-helper)
 - [Override the route binding resolver for each of your models](#override-the-route-binding-resolver-for-each-of-your-models)
-- [If you need public URL but you want them to be secured](#if-you-need-public-url-but-you-want-them-to-be-secured)
+- [If you need public URL, but you want them to be secured](#if-you-need-public-url-but-you-want-them-to-be-secured)
 - [Using Gate in middleware method](#using-gate-in-middleware-method)
 - [Simple route with arrow function](#simple-route-with-arrow-function)
-- [Return a view directly from a route](#route-view)
+- [Route view](#route-view)
 - [Route directory instead of route file](#route-directory-instead-of-route-file)
 - [Route resources grouping](#route-resources-grouping)
 - [Custom route bindings](#custom-route-bindings)
+- [Two ways to check the route name](#two-ways-to-check-the-route-name)
+- [Route model binding soft-deleted models](#route-model-binding-soft-deleted-models)
+- [Retrieve the URL without query parameters](#retrieve-the-url-without-query-parameters)
+- [Customizing Missing Model Behavior in route model bindings](#customizing-missing-model-behavior-in-route-model-bindings)
+- [Exclude middleware from a route](#exclude-middleware-from-a-route)
+- [Controller groups](#controller-groups)
 
 ### Route group within a group
 
@@ -35,14 +42,73 @@ In Routes, you can create a group within a group, assigning a certain middleware
 
 ```php
 Route::group(['prefix' => 'account', 'as' => 'account.'], function() {
-    Route::get('login', 'AccountController@login');
-    Route::get('register', 'AccountController@register');
-    
+    Route::get('login', [AccountController::class, 'login']);
+    Route::get('register', [AccountController::class, 'register']);
     Route::group(['middleware' => 'auth'], function() {
-        Route::get('edit', 'AccountController@edit');
+        Route::get('edit', [AccountController::class, 'edit']);
     });
 });
 ```
+
+### Declare a resolveRouteBinding method in your Model
+
+Route model binding in Laravel is great, but there are cases where we can't just allow users to easily access resources by ID. We might need to verify their ownership of a resource.
+
+You can declare a resolveRouteBinding method in your Model and add your custom logic there.
+
+```php
+public function resolveRouteBinding($value, $field = null)
+{
+     $user = request()->user();
+
+     return $this->where([
+          ['user_id' => $user->id],
+          ['id' => $value]
+     ])->firstOrFail();
+}
+```
+
+Tip given by [@notdylanv](https://twitter.com/notdylanv/status/1567296232183447552/)
+
+### assign withTrashed() to Route::resource() method
+
+Before Laravel 9.35 - only for Route::get()
+```php
+Route::get('/users/{user}', function (User $user) {
+     return $user->email;
+})->withTrashed();
+```
+
+Since Laravel 9.35 - also for `Route::resource()`!
+```php
+Route::resource('users', UserController::class)
+     ->withTrashed();
+```
+
+Or, even by method
+```php
+Route::resource('users', UserController::class)
+     ->withTrashed(['show']);
+```
+
+### Skip Input Normalization
+
+Laravel automatically trims all incoming string fields on the request. It's called Input Normalization.
+
+Sometimes, you might not want this behavior.
+
+You can use skipWhen method on the TrimStrings middleware and return true to skip it.
+
+```php
+public function boot()
+{
+     TrimStrings::skipWhen(function ($request) {
+          return $request->is('admin/*);
+     });
+}
+```
+
+Tip given by [@Laratips1](https://twitter.com/Laratips1/status/1580210517372596224)
 
 ### Wildcard subdomains
 
@@ -114,38 +180,12 @@ Tip is based on [suggestion](https://github.com/LaravelDaily/laravel-tips/pull/5
 
 ### Route Model Binding: You can define a key
 
-You can do Route model binding like `Route::get('api/users/{user}', function (App\User $user) { … }` - but not only by ID field. If you want `{user}` to be a `username`
-field, put this in the model:
+You can do Route model binding like `Route::get('api/users/{user}', function (User $user) { … }` - but not only by ID field. If you want `{user}` to be a `username` field, put this in the model:
 
 ```php
 public function getRouteKeyName() {
     return 'username';
 }
-```
-
-### Quickly Navigate from Routes file to Controller
-
-This thing was optional before Laravel 8, and became a standard main syntax of routing in Laravel 8.
-
-Instead of routing like this:
-```php
-Route::get('page', 'PageController@action');
-```
-
-You can specify the Controller as a class:
-```php
-Route::get('page', [\App\Http\Controllers\PageController::class, 'action']);
-```
-
-Then you will be able to click on **PageController** in PhpStorm, and navigate directly to Controller, instead of searching for it manually.
-
-Or, to make it shorter, add this to top of Routes file:
-
-```php
-use App\Http\Controllers\PageController;
-
-// Then:
-Route::get('page', [PageController::class, 'action']);
 ```
 
 ### Route Fallback: When no Other Route is Matched
@@ -154,8 +194,8 @@ If you want to specify additional logic for not-found routes, instead of just th
 
 ```php
 Route::group(['middleware' => ['auth'], 'prefix' => 'admin', 'as' => 'admin.'], function () {
-    Route::get('/home', 'HomeController@index');
-    Route::resource('tasks', 'Admin\TasksController');
+    Route::get('/home', [HomeController::class, 'index']);
+    Route::resource('tasks', [Admin\TasksController::class]);
 });
 
 // Some more routes....
@@ -169,19 +209,21 @@ Route::fallback(function() {
 We can validate parameters directly in the route, with “where” parameter. A pretty typical case is to prefix your routes by language locale, like `fr/blog` and `en/article/333`. How do we ensure that those two first letters are not used for some other than language?
 
 `routes/web.php`:
+
 ```php
 Route::group([
     'prefix' => '{locale}',
     'where' => ['locale' => '[a-zA-Z]{2}']
 ], function () {
-    Route::get('/', 'HomeController@index');
-    Route::get('article/{id}', 'ArticleController@show');
+    Route::get('/', [HomeController::class, 'index']);
+    Route::get('article/{id}', [ArticleController::class, 'show']);;
 });
 ```
 
 ### Rate Limiting: Global and for Guests/Users
 
 You can limit some URL to be called a maximum of 60 times per minute, with `throttle:60,1`:
+
 ```php
 Route::middleware('auth:api', 'throttle:60,1')->group(function () {
     Route::get('/user', function () {
@@ -191,6 +233,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(function () {
 ```
 
 But also, you can do it separately for public and for logged-in users:
+
 ```php
 // maximum of 10 requests for guests, 60 for authenticated users
 Route::middleware('throttle:10|60,1')->group(function () {
@@ -199,6 +242,7 @@ Route::middleware('throttle:10|60,1')->group(function () {
 ```
 
 Also, you can have a DB field users.rate_limit and limit the amount for specific user:
+
 ```php
 Route::middleware('auth:api', 'throttle:rate_limit,1')->group(function () {
     Route::get('/user', function () {
@@ -224,7 +268,6 @@ $url = route('profile', ['id' => 1, 'photos' => 'yes']); // Result: /user/1/prof
 If you have a set of routes related to a certain "section", you may separate them in a special `routes/XXXXX.php` file, and just include it in `routes/web.php`
 
 Example with `routes/auth.php` in [Laravel Breeze](https://github.com/laravel/breeze/blob/1.x/stubs/routes/web.php) by Taylor Otwell himself:
-
 
 ```php
 Route::get('/', function () {
@@ -306,77 +349,22 @@ Route::resource('p', ProductController::class)->names('products');
 So this code above will generate URLs like `/p`, `/p/{id}`, `/p/{id}/edit`, etc.
 But you would call them in the code by `route('products.index')`, `route('products.create')`, etc.
 
-### More Readable Route List
-
-Have you ever run "php artisan route:list" and then realized that the list takes too much space and hard to read?
-
-Here's the solution:
-`php artisan route:list --compact`
-
-Then it shows 3 columns instead of 6 columns: shows only Method / URI / Action.
-
-```
-+----------+---------------------------------+-------------------------------------------------------------------------+
-| Method   | URI                             | Action                                                                  |
-+----------+---------------------------------+-------------------------------------------------------------------------+
-| GET|HEAD | /                               | Closure                                                                 |
-| GET|HEAD | api/user                        | Closure                                                                 |
-| POST     | confirm-password                | App\Http\Controllers\Auth\ConfirmablePasswordController@store           |
-| GET|HEAD | confirm-password                | App\Http\Controllers\Auth\ConfirmablePasswordController@show            |
-| GET|HEAD | dashboard                       | Closure                                                                 |
-| POST     | email/verification-notification | App\Http\Controllers\Auth\EmailVerificationNotificationController@store |
-| POST     | forgot-password                 | App\Http\Controllers\Auth\PasswordResetLinkController@store             |
-| GET|HEAD | forgot-password                 | App\Http\Controllers\Auth\PasswordResetLinkController@create            |
-| POST     | login                           | App\Http\Controllers\Auth\AuthenticatedSessionController@store          |
-| GET|HEAD | login                           | App\Http\Controllers\Auth\AuthenticatedSessionController@create         |
-| POST     | logout                          | App\Http\Controllers\Auth\AuthenticatedSessionController@destroy        |
-| POST     | register                        | App\Http\Controllers\Auth\RegisteredUserController@store                |
-| GET|HEAD | register                        | App\Http\Controllers\Auth\RegisteredUserController@create               |
-| POST     | reset-password                  | App\Http\Controllers\Auth\NewPasswordController@store                   |
-| GET|HEAD | reset-password/{token}          | App\Http\Controllers\Auth\NewPasswordController@create                  |
-| GET|HEAD | verify-email                    | App\Http\Controllers\Auth\EmailVerificationPromptController@__invoke    |
-| GET|HEAD | verify-email/{id}/{hash}        | App\Http\Controllers\Auth\VerifyEmailController@__invoke                |
-+----------+---------------------------------+-------------------------------------------------------------------------+
-```
-
-You can also specify the exact columns you want:
-
-`php artisan route:list --columns=Method,URI,Name`
-
-```
-+----------+---------------------------------+---------------------+
-| Method   | URI                             | Name                |
-+----------+---------------------------------+---------------------+
-| GET|HEAD | /                               |                     |
-| GET|HEAD | api/user                        |                     |
-| POST     | confirm-password                |                     |
-| GET|HEAD | confirm-password                | password.confirm    |
-| GET|HEAD | dashboard                       | dashboard           |
-| POST     | email/verification-notification | verification.send   |
-| POST     | forgot-password                 | password.email      |
-| GET|HEAD | forgot-password                 | password.request    |
-| POST     | login                           |                     |
-| GET|HEAD | login                           | login               |
-| POST     | logout                          | logout              |
-| POST     | register                        |                     |
-| GET|HEAD | register                        | register            |
-| POST     | reset-password                  | password.update     |
-| GET|HEAD | reset-password/{token}          | password.reset      |
-| GET|HEAD | verify-email                    | verification.notice |
-| GET|HEAD | verify-email/{id}/{hash}        | verification.verify |
-+----------+---------------------------------+---------------------+
-```
-
 ### Eager load relationship
-If you use Route Model Binding and think you can't use Eager Loading for relationships, think again.<br>
+
+If you use Route Model Binding and think you can't use Eager Loading for relationships, think again.
+
 So you use Route Model Binding
+
 ```php
 public function show(Product $product) {
     //
 }
 ```
-But you have a belongsTo relationship, and cannot use $product->with('category') eager loading?<br>
+
+But you have a belongsTo relationship, and cannot use $product->with('category') eager loading?
+
 You actually can! Load the relationship with `->load()`
+
 ```php
 public function show(Product $product) {
     $product->load('category');
@@ -385,7 +373,9 @@ public function show(Product $product) {
 ```
 
 ### Localizing Resource URIs
+
 If you use resource controllers, but want to change URL verbs to non-English, so instead of `/create` you want Spanish `/crear`, you can configure it with `Route::resourceVerbs()` method.
+
 ```php
 public function boot()
 {
@@ -398,18 +388,24 @@ public function boot()
 ```
 
 ### Resource Controllers naming
-In Resource Controllers, in `routes/web.php` you can specify `->names()` parameter, so the URL prefix and the route name prefix may be different.<br>
+
+In Resource Controllers, in `routes/web.php` you can specify `->names()` parameter, so the URL prefix and the route name prefix may be different.
+
 This will generate URLs like `/p`, `/p/{id}`, `/p/{id}/edit` etc. But you would call them:
+
 - route('products.index)
 - route('products.create)
 - etc
+
 ```php
 Route::resource('p', \App\Http\Controllers\ProductController::class)->names('products');
 ```
 
 ### Easily highlight your navbar menus
+
 Use `Route::is('route-name')` to easily highlight your navbar menus
-```html
+
+```blade
 <ul>
     <li @if(Route::is('home')) class="active" @endif>
         <a href="/">Home</a>
@@ -423,6 +419,7 @@ Use `Route::is('route-name')` to easily highlight your navbar menus
 Tip given by [@anwar_nairi](https://twitter.com/anwar_nairi/status/1443893957507747849)
 
 ### Generate absolute path using route() helper
+
 ```php
 route('page.show', $page->id);
 // http://laravel.test/pages/1
@@ -431,10 +428,12 @@ route('page.show', $page->id, false);
 // /pages/1
 ```
 
-Tip given by [@oliverds_](https://twitter.com/oliverds_/status/1445796035742240770)
+Tip given by [@oliverds\_](https://twitter.com/oliverds_/status/1445796035742240770)
 
 ### Override the route binding resolver for each of your models
+
 You can override the route binding resolver for each of your models. In this example, I have no control over the @ sign in the URL, so using the `resolveRouteBinding` method, I'm able to remove the @ sign and resolve the model.
+
 ```php
 // Route
 Route::get('{product:slug}', Controller::class);
@@ -446,15 +445,17 @@ https://nodejs.pub/@unlock/hello-world
 public function resolveRouteBinding($value, $field = null)
 {
     $value = str_replace('@', '', $value);
-    
+
     return parent::resolveRouteBinding($value, $field);
 }
 ```
 
 Tip given by [@Philo01](https://twitter.com/Philo01/status/1447539300397195269)
 
-### If you need public URL but you want them to be secured
+### If you need public URL, but you want them to be secured
+
 If you need public URL but you want them to be secured, use Laravel signed URL
+
 ```php
 class AccountController extends Controller
 {
@@ -465,16 +466,16 @@ class AccountController extends Controller
         ]);
         // Send link by email...
     }
-    
+
     public function confirmDestroy(Request $request, User $user)
     {
         if (! $request->hasValidSignature()) {
             abort(403);
         }
-        
-        // User confirmed by clikcing on the email
+
+        // User confirmed by clicking on the email
         $user->delete();
-        
+
         return redirect()->route('home');
     }
 }
@@ -482,8 +483,8 @@ class AccountController extends Controller
 
 Tip given by [@anwar_nairi](https://twitter.com/anwar_nairi/status/1448239591467589633)
 
-
 ### Using Gate in middleware method
+
 You can use the gates you specified in `App\Providers\AuthServiceProvider` in middleware method.
 
 To do this, you just need to put inside the `can:` and the names of the necessary gates.
@@ -494,7 +495,8 @@ Route::put('/post/{post}', function (Post $post) {
 })->middleware('can:update,post');
 ```
 
-### Simple route with arrow function 
+### Simple route with arrow function
+
 You can use php arrow function in routing, without having to use anonymous function.
 
 To do this, you can use `fn() =>`, it looks easier.
@@ -509,9 +511,9 @@ Route::get('/example', function () {
 Route::get('/example', fn () => User::all());
 ```
 
-### Route view 
-You can use `Route::view($uri , $bladePage)` to return a view directly, without having to use controller function.
+### Route view
 
+You can use `Route::view($uri , $bladePage)` to return a view directly, without having to use controller function.
 
 ```php
 //this will return home.blade.php view
@@ -520,7 +522,7 @@ Route::view('/home', 'home');
 
 ### Route directory instead of route file
 
-You can create a */routes/web/* directory and only fill */routes/web.php* with:
+You can create a _/routes/web/_ directory and only fill _/routes/web.php_ with:
 
 ```php
 foreach(glob(dirname(__FILE__).'/web/*', GLOB_NOSORT) as $route_file){
@@ -528,10 +530,12 @@ foreach(glob(dirname(__FILE__).'/web/*', GLOB_NOSORT) as $route_file){
 }
 ```
 
-Now every file inside */routes/web/* act as a web router file and you can organize your routes into diferent files.
+Now every file inside _/routes/web/_ act as a web router file and you can organize your routes into different files.
 
 ### Route resources grouping
+
 If your routes have a lot of resource controllers, you can group them and call one Route::resources() instead of many single Route::resource() statements.
+
 ```php
 Route::resources([
     'photos' => PhotoController::class,
@@ -540,16 +544,18 @@ Route::resources([
 ```
 
 ### Custom route bindings
-Did you know you can define custom route bindings in Laravel?<br>
 
-In this example, I need to resolve a portfolio by slug. But the slug is not unique, because multiple users can have a portfolio named 'Foo'<br>
+Did you know you can define custom route bindings in Laravel?
+
+In this example, I need to resolve a portfolio by slug. But the slug is not unique, because multiple users can have a portfolio named 'Foo'
 
 So I define how Laravel should resolve them from a route parameter
+
 ```php
 class RouteServiceProvider extends ServiceProvider
 {
     public const HOME = '/dashboard';
-    
+
     public function boot()
     {
         Route::bind('portfolio', function (string $slug) {
@@ -571,3 +577,101 @@ Route::get('portfolios/{portfolio}', function (Portfolio $portfolio) {
 ```
 
 Tip given by [@mmartin_joo](https://twitter.com/mmartin_joo/status/1496871240346509312)
+
+### Two ways to check the route name
+
+Here are two ways to check the route name in Laravel.
+
+```php
+// #1
+<a
+    href="{{ route('home') }}"
+    @class="['navbar-link', 'active' => Route::current()->getName() === 'home']"
+>
+    Home
+</a>
+// #2
+<a
+    href="{{ route('home') }}"
+    @class="['navbar-link', 'active' => request()->routeIs('home)]"
+>
+    Home
+</a>
+```
+
+Tip given by [@AndrewSavetchuk](https://twitter.com/AndrewSavetchuk/status/1510197418909999109)
+
+### Route model binding soft-deleted models
+
+By default, when using route model binding will not retrieve models that have been soft-deleted.
+You can change that behavior by using `withTrashed` in your route.
+
+```php
+Route::get('/posts/{post}', function (Post $post) {
+    return $post;
+})->withTrashed();
+```
+
+Tip given by [@cosmeescobedo](https://twitter.com/cosmeescobedo/status/1511154599255703553)
+
+### Retrieve the URL without query parameters
+
+If for some reason, your URL is having query parameters, you can retrieve the URL without query parameters using the `fullUrlWithoutQuery` method of request like so.
+
+```php
+// Original URL: https://www.amitmerchant.com?search=laravel&lang=en&sort=desc
+$urlWithQueryString = $request->fullUrlWithoutQuery([
+    'lang',
+    'sort'
+]);
+echo $urlWithQueryString;
+// Outputs: https://www.amitmerchant.com?search=laravel
+```
+
+Tip given by [@amit_merchant](https://twitter.com/amit_merchant/status/1510867527962066944)
+
+### Customizing Missing Model Behavior in route model bindings
+
+By default, Laravel throws a 404 error when it can't bind the model, but you can change that behavior by passing a closure to the missing method.
+
+```php
+Route::get('/users/{user}', [UsersController::class, 'show'])
+    ->missing(function ($parameters) {
+        return Redirect::route('users.index');
+    });
+```
+
+Tip given by [@cosmeescobedo](https://twitter.com/cosmeescobedo/status/1511322007576608769)
+
+### Exclude middleware from a route
+
+You can exclude middleware at the route level in Laravel using the withoutMiddleware method.
+
+```php
+Route::post('/some/route', SomeController::class)
+    ->withoutMiddleware([VerifyCsrfToken::class]);
+```
+
+Tip given by [@alexjgarrett](https://twitter.com/alexjgarrett/status/1512529798790320129)
+
+### Controller groups
+
+Instead of using the controller in each route, consider using a route controller group. Added to Laravel since v8.80
+
+```php
+// Before
+Route::get('users', [UserController::class, 'index']);
+Route::post('users', [UserController::class, 'store']);
+Route::get('users/{user}', [UserController::class, 'show']);
+Route::get('users/{user}/ban', [UserController::class, 'ban']);
+// After
+Route::controller(UsersController::class)->group(function () {
+    Route::get('users', 'index');
+    Route::post('users', 'store');
+    Route::get('users/{user}', 'show');
+    Route::get('users/{user}/ban', 'ban');
+});
+```
+
+Tip given by [@justsanjit](https://twitter.com/justsanjit/status/1514943541612527616)
+

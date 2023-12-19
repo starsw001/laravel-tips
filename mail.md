@@ -1,8 +1,9 @@
 ## Mail
 
-⬆️ [Go to main menu](README.md#laravel-tips) ⬅️ [Previous (Auth)](Auth.md) ➡️ [Next (Artisan)](Artisan.md)
+⬆️ [Go to main menu](README.md#laravel-tips) ⬅️ [Previous (Auth)](auth.md) ➡️ [Next (Artisan)](artisan.md)
 
 - [Testing email into laravel.log](#testing-email-into-laravellog)
+- [You don’t have to store files to use them as email attachments in Laravel](#you-dont-have-to-store-files-to-use-them-as-email-attachments-in-laravel)
 - [Preview Mailables](#preview-mailables)
 - [Preview Mail without Mailables](#preview-mail-without-mailables)
 - [Default Email Subject in Laravel Notifications](#default-email-subject-in-laravel-notifications)
@@ -12,6 +13,26 @@
 ### Testing email into laravel.log
 
 If you want to test email contents in your app but unable or unwilling to set up something like Mailgun, use `.env` parameter `MAIL_DRIVER=log` and all the email will be saved into `storage/logs/laravel.log` file, instead of actually being sent.
+
+### You don’t have to store files to use them as email attachments in Laravel
+
+Simply use **attachData** to add user uploaded files in Mailables.
+
+Here's a snippet from a Mailable class using it.
+```php
+public function build()
+{
+     return $this->subject('Inquiry')
+          ->to('example@example.com')
+          ->markdown('email.inquiry')
+          ->attachData(
+               $this->file,
+               $this->file->getClientOriginalName(),
+          );
+}
+```
+
+Tip given by [@ecrmnn](https://twitter.com/ecrmnn/status/1570449885664808961)
 
 ### Preview Mailables
 
@@ -26,7 +47,7 @@ Route::get('/mailable', function () {
 
 ### Preview Mail without Mailables
 
-You can also preview your email without Mailables. For instance, when you are creating notification, you can specify the markdown that may be use for your mail notification. 
+You can also preview your email without Mailables. For instance, when you are creating notification, you can specify the markdown that may be use for your mail notification.
 
 ```php
 use Illuminate\Notifications\Messages\MailMessage;
@@ -36,16 +57,17 @@ Route::get('/mailable', function () {
     return (new MailMessage)->markdown('emails.invoice-paid', compact('invoice'));
 });
 ```
+
 You may also use other methods provided by `MailMessage` object such as `view` and others.
 
 Tip given by [@raditzfarhan](https://github.com/raditzfarhan)
-
 
 ### Default Email Subject in Laravel Notifications
 
 If you send Laravel Notification and don't specify subject in **toMail()**, default subject is your notification class name, CamelCased into Spaces.
 
 So, if you have:
+
 ```php
 class UserRegistrationEmail extends Notification {
     //
@@ -66,7 +88,9 @@ Notification::route('mail', 'taylor@example.com')
 ```
 
 ### Set conditional object properties
+
 You can use the `when()` or `unless()` methods in your MailMessage notifications to set conditional object properties like a call to action.
+
 ```php
 class InvoicePaid extends Notification
 {
@@ -74,7 +98,7 @@ class InvoicePaid extends Notification
     {
         return (new MailMessage)
             ->success()
-            ->line('We've received your payment)
+            ->line('We\'ve received your payment')
             ->when($user->isOnMonthlyPaymentPlan(), function (MailMessage $message) {
                 $message->action('Save 20% by paying yearly', route('account.billing'));
             })
@@ -83,6 +107,7 @@ class InvoicePaid extends Notification
 }
 ```
 
-Use the `when` or `unless` methods in you own classes by using the `Illuminate\Support\Traits\Conditionable` trait<br>
+Use the `when` or `unless` methods in you own classes by using the `Illuminate\Support\Traits\Conditionable` trait
 
 Tip given by [@Philo01](https://twitter.com/Philo01/status/1503302749525528582)
+

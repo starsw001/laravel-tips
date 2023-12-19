@@ -1,8 +1,7 @@
 ## Migrations
 
-⬆️ [Go to main menu](README.md#laravel-tips) ⬅️ [Previous (Models Relations)](Models_Relations.md) ➡️ [Next (Views)](Views.md)
+⬆️ [Go to main menu](README.md#laravel-tips) ⬅️ [Previous (Models Relations)](models-relations.md) ➡️ [Next (Views)](views.md)
 
-- [Unsigned Integer](#unsigned-integer)
 - [Order of Migrations](#order-of-migrations)
 - [Migration fields with timezones](#migration-fields-with-timezones)
 - [Database migrations column types](#database-migrations-column-types)
@@ -16,26 +15,8 @@
 - [You can add "comment" about a column inside your migrations](#you-can-add-comment-about-a-column-inside-your-migrations)
 - [Checking For Table / Column Existence](#checking-for-table--column-existence)
 - [Group Columns within an After Method](#group-columns-within-an-after-method)
-
-### Unsigned Integer
-
-For foreign key migrations instead of `integer()` use `unsignedInteger()` type or `integer()->unsigned()`, otherwise you may get SQL errors.
-
-```php
-Schema::create('employees', function (Blueprint $table) {
-    $table->unsignedInteger('company_id');
-    $table->foreign('company_id')->references('id')->on('companies');
-    // ...
-});
-```
-
-You can also use `unsignedBigInteger()` if that other column is `bigInteger()` type.
-
-```php
-Schema::create('employees', function (Blueprint $table) {
-    $table->unsignedBigInteger('company_id');
-});
-```
+- [Add the column in the database table only if it's not present & can drop it if, its present](#add-the-column-in-the-database-table-only-if-its-not-present--can-drop-it-if-its-present)
+- [Method to set the default value for current timestamp](#method-to-set-the-default-value-for-current-timestamp)
 
 ### Order of Migrations
 
@@ -89,13 +70,10 @@ If you want to check what migrations are executed or not yet, no need to look at
 Example result:
 
 ```
-+------+------------------------------------------------+-------+
-| Ran? | Migration                                      | Batch |
-+------+------------------------------------------------+-------+
-| Yes  | 2014_10_12_000000_create_users_table           | 1     |
-| Yes  | 2014_10_12_100000_create_password_resets_table | 1     |
-| No   | 2019_08_19_000000_create_failed_jobs_table     |       |
-+------+------------------------------------------------+-------+
+Migration name .......................................................................... Batch / Status  
+2014_10_12_000000_create_users_table ........................................................... [1] Ran  
+2014_10_12_100000_create_password_resets_table ................................................. [1] Ran  
+2019_08_19_000000_create_failed_jobs_table ..................................................... [1] Ran    
 ```
 
 ### Create Migration with Spaces
@@ -166,7 +144,7 @@ class ChangeFieldsProductsTable extends Migration
 }
 ```
 
-But add `in_xxxxx_table` `php artisan make:migration change_fields_in_products_table` and it generates class with `Schemma::table()` pre-fileed
+But add `in_xxxxx_table` `php artisan make:migration change_fields_in_products_table` and it generates class with `Schema::table()` pre-filled
 
 ```php
 class ChangeFieldsProductsTable extends Migration
@@ -236,7 +214,8 @@ Tip given by [@nicksdot](https://twitter.com/nicksdot/status/1432340806275198978
 
 ### You can add "comment" about a column inside your migrations
 
-You can add "comment" about a column inside your migrations and provide useful information.<br>
+You can add "comment" about a column inside your migrations and provide useful information.
+
 If database is managed by someone other than developers, they can look at comments in Table structure before performing any operations.
 
 ```php
@@ -268,7 +247,7 @@ Tip given by [@dipeshsukhia](https://github.com/dipeshsukhia)
 In your migrations, you can add multiple columns after another column using the after method:
 
 ```php
-Schema::table('uers', function (Blueprint $table) {
+Schema::table('users', function (Blueprint $table) {
     $table->after('password', function ($table) {
         $table->string('address_line1');
         $table->string('address_line2');
@@ -278,3 +257,49 @@ Schema::table('uers', function (Blueprint $table) {
 ```
 
 Tip given by [@ncosmeescobedo](https://twitter.com/cosmeescobedo/status/1512233993176973314)
+
+### Add the column in the database table only if it's not present & can drop it if, its present
+
+Now you can add the column in the database table only if its not present & can drop it if, its present. For that following methods are introduced:
+
+👉 whenTableDoesntHaveColumn
+
+👉 whenTableHasColumn
+
+Available from Laravel 9.6.0
+
+```php
+return new class extends Migration {
+    public function up()
+    {
+        Schema::whenTableDoesntHaveColumn('users', 'name', function (Blueprint $table) {
+            $table->string('name', 30);
+        });
+    }
+
+    public function down()
+    {
+        Schema::whenTableHasColumn('users', 'name', function (Blueprint $table) {
+            $table->dropColumn('name');
+        });
+    }
+}
+```
+
+Tip given by [@iamharis010](https://twitter.com/iamharis010/status/1510579415163432961)
+
+### Method to set the default value for current timestamp
+
+You can use `useCurrent()` method for your custom timestamp column to store the current timestamp as a default value.
+
+```php
+Schema::create('posts', function (Blueprint $table) {
+    $table->id();
+    $table->string('title');
+    $table->timestamp('added_at')->useCurrent();
+    $table->timestamps();
+});
+```
+
+Tip given by [@iamgurmandeep](https://twitter.com/iamgurmandeep/status/1517152425748148225)
+

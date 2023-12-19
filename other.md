@@ -1,10 +1,20 @@
 ## Other
 
-⬆️ [Go to main menu](README.md#laravel-tips) ⬅️ [Previous (API)](Api.md)
+⬆️ [Go to main menu](README.md#laravel-tips) ⬅️ [Previous (API)](api.md)
 
 - [Localhost in .env](#localhost-in-env)
+- [Time value in the past/future](#time-value-in-the-pastfuture)
+- [Do some work after a response has been sent to the browser](#do-some-work-after-a-response-has-been-sent-to-the-browser)
+- [Redirect with URL fragment](#redirect-with-url-fragment)
+- [Use middleware to adjust incoming request](#use-middleware-to-adjust-incoming-request)
+- [Redirect away from Laravel app](#redirect-away-from-laravel-app)
+- [Blade directive to show data in specific environment](#blade-directive-to-show-data-in-specific-environment)
+- [Schedule Laravel job based on time zone](#schedule-laravel-job-based-on-time-zone)
+- [Use assertModelMissing instead assertDatabaseMissing](#use-assertmodelmissing-instead-assertdatabasemissing)
+- [Various options to format diffForHumans()](#various-options-to-format-diffforhumans)
+- [Create custom disks at runtime](#create-custom-disks-at-runtime)
 - [When (NOT) to run "composer update"](#when-not-to-run-composer-update)
-- [Composer: check for newer versions](#composer-check-for-newer-versions)
+- [Composer: Check for Newer Versions](#composer-check-for-newer-versions)
 - [Auto-Capitalize Translations](#auto-capitalize-translations)
 - [Carbon with Only Hours](#carbon-with-only-hours)
 - [Single Action Controllers](#single-action-controllers)
@@ -14,7 +24,6 @@
 - [Repeatable Callback Functions](#repeatable-callback-functions)
 - [Request: has any](#request-has-any)
 - [Simple Pagination](#simple-pagination)
-- [Data Get Function](#data-get-function)
 - [Blade directive to add true/false conditions](#blade-directive-to-add-truefalse-conditions)
 - [Jobs can be used without queues](#jobs-can-be-used-without-queues)
 - [Use faker outside factories or seeders](#use-faker-outside-factories-or-seeders)
@@ -33,7 +42,7 @@
 - [There are multiple ways to return a view with variables](#there-are-multiple-ways-to-return-a-view-with-variables)
 - [Schedule regular shell commands](#schedule-regular-shell-commands)
 - [HTTP client request without verifying](#http-client-request-without-verifying)
-- [Test that doesn't assert anything ](#test-that-doesnt-assert-anything)
+- [Test that doesn't assert anything](#test-that-doesnt-assert-anything)
 - ["Str::mask()" method](#strmask-method)
 - [Extending Laravel classes](#extending-laravel-classes)
 - [Can feature](#can-feature)
@@ -52,12 +61,19 @@
 - [Get value from session and forget](#get-value-from-session-and-forget)
 - [$request->date() method](#request-date-method)
 - [Use through instead of map when using pagination](#use-through-instead-of-map-when-using-pagination)
-- [Quickly add a bearer token to HTTP request](#quickly-add-a-bearer-token-to-HTTP-request)
+- [Quickly add a bearer token to HTTP request](#quickly-add-a-bearer-token-to-http-request)
 - [Copy file or all files from a folder](#copy-file-or-all-files-from-a-folder)
 - [Sessions has() vs exists() vs missing()](#sessions-has-vs-exists-vs-missing)
 - [Test that you are passing the correct data to a view](#test-that-you-are-passing-the-correct-data-to-a-view)
 - [Use Redis to track page views](#use-redis-to-track-page-views)
-- [to_route() helper function](#to\_route-helper-function)
+- [to_route() helper function](#to_route-helper-function)
+- [Pause a long running job when queue worker shuts down](#pause-a-long-running-job-when-queue-worker-shuts-down)
+- [Freezing Time in Laravel Tests](#freezing-time-in-laravel-tests)
+- [New squish helper](#new-squish-helper)
+- [Specify what to do if a scheduled task fails or succeeds](#specify-what-to-do-if-a-scheduled-task-fails-or-succeeds)
+- [Scheduled command on specific environments](#scheduled-command-on-specific-environments)
+- [Add conditionable behavior to your own classes](#add-conditionable-behavior-to-your-own-classes)
+- [Perform Action when Job has failed](#perform-action-when-job-has-failed)
 
 ### Localhost in .env
 
@@ -70,6 +86,206 @@ APP_KEY=base64:9PHz3TL5C4YrdV6Gg/Xkkmx9btaE93j7rQTUZWm2MqU=
 APP_DEBUG=true
 APP_URL=http://localhost
 ```
+
+### Time value in the past/future
+
+If you want to have some time value in the past/future, you can build it by chaining various Laravel/Carbon helpers, like `now()->[add or subtract something]->setTime()`
+
+```php
+$product = Product::factory()->create([
+     'published_at' => now()->addDay()->setTime(14, 00),
+]);
+```
+
+### Do some work after a response has been sent to the browser
+
+You can also use middleware to do some work after a response has been sent to the browser. Such middleware is called Terminable Middleware.
+
+You can make a middleware terminable by defining a `terminate` method on a middleware.
+
+This method will be automatically called after a response is sent to the browser. It will have both request and response as params.
+
+```php
+class TerminatingMiddleware
+{
+    public function handle($request, Closure $next)
+    {
+        return $next($request);
+    }
+ 
+    public function terminate($request, $response)
+    {
+        // ...
+    }
+}
+```
+
+Tip given by [@Laratips1](https://twitter.com/Laratips1/status/1567045288338280448/)
+
+### Redirect with URL fragment
+
+Did you know you can add a URI fragment when redirecting to a route in Laravel?
+
+Super useful when redirecting to a specific section of the page. E.g. reviews section on a product page.
+```php
+return redirect()
+     ->back()
+     ->withFragment('contactForm');
+     // domain.test/url#contactForm
+
+return redirect()
+     ->route('product.show')
+     ->withFragment('reviews');
+     // domain.test/product/23#reviews
+```
+
+Tip given by [@ecrmnn](https://twitter.com/ecrmnn/status/1574813643425751040)
+
+### Use middleware to adjust incoming request
+
+Laravel's middlewares are a great way to transform incoming requests. For example, I decided to rename a model in my application; instead of bumping the API version for a breaking change, I simply convert those requests using the old reference.
+```php
+class ConvertLicenseeIntoContact
+{
+     public function handle(Request $request, Closure $next)
+     {
+          if($request->json('licensee_id')) {
+               $request->json()->set('contact_id', $request->json('licensee_id'));
+          }
+
+          return $next($request);
+     }
+}
+```
+
+Tip given by [@Philo01](https://twitter.com/Philo01/status/1581214787467235329)
+
+### Redirect away from Laravel app
+
+Sometimes, you might need to redirect away from your Laravel application to other websites. In that case, there is a handy away method you can call on the redirect() method...
+
+```php
+redirect()->away('https://www.google.com');
+```
+
+It creates a `RedirectResponse` without any additional URL encoding, validation, or verification.
+
+Tip given by [@Laratips1](https://twitter.com/Laratips1/status/1581887837972361216)
+
+### Blade directive to show data in specific environment
+
+Did you know Laravel has a 'production' blade directive that you can use to show data only when you are in a production environment?
+
+There is also another 'env' directive that you can use to show data in the environment you specify.
+```blade
+@production
+     // I am only visible to the production environment...
+@endproduction
+
+@env('staging')
+     // I am only visible to the staging environment...
+@endenv
+
+@env(['staging', 'production'])
+     // I am only visible to both the staging and production environment...
+@endenv
+```
+
+Tip given by [@Laratips1](https://twitter.com/Laratips1/status/1582615079874220032)
+
+### Schedule Laravel job based on time zone
+
+Do you know you can schedule laravel job based on time zone
+
+Setting Timezone for One Command:
+```php
+$schedule->command('reportg:generate')
+         ->timezone('America/New_York')
+         ->at('2:00');
+```
+
+If you are repeatedly assigning the same timezone to all of your schedule tasks, you may wish to define a `scheduleTimezone` method in you `app\Console\Kernel` class:
+```php
+protected function scheduleTimezone()
+{
+     return 'America/Chicago';
+}
+```
+
+Tip given by [@binumathew](https://twitter.com/binumathew/status/1584830693791928320)
+
+### Use assertModelMissing instead assertDatabaseMissing
+
+While testing model deletion, use assertModelMissing instead assertDatabaseMissing.
+```php
+/** @test */
+public function allowed_user_can_delete_task()
+{
+     $task = Task::factory()->for($this->project)->create();
+
+     $this->deleteJson($task->path())
+          ->assertNoContent();
+
+     // Instead of assertDatabaseMissing to check if the model missing from the database
+     $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
+
+     // use directly assertModelMissing
+     $this->assertModelMissing($task);
+}
+```
+
+Tip given by [@h_ik04](https://twitter.com/h_ik04/status/1585593621193129986)
+
+### Various options to format diffForHumans()
+
+In Carbon, did you know you can add various options to format diffForHumans()? [Read the docs for more examples.](https://carbon.nesbot.com/docs/#api-humandiff)
+```php
+$user->created_at->diffForHumans();
+```
+=> `"17 hours ago"`
+
+
+```php
+$user->created_at->diffForHumans([
+     'parts' => 2
+]);
+```
+=> `"17 hours 54 minutes ago"`
+
+
+```php
+$user->created_at->diffForHumans([
+     'parts' => 3
+     'join' => ', ',
+]);
+```
+=> `"17 hours, 54 minutes, 50 seconds ago"`
+
+
+```php
+$user->created_at->diffForHumans([
+     'parts' => 3,
+     'join' => ', ',
+     'short' => true,
+]);
+```
+=> `"17h, 54m, 50s ago"`
+
+### Create custom disks at runtime
+
+Did you know that you can create custom disks at runtime without the need to have the config in your config/filesystems file?
+
+This can be handy to manage files in custom paths without the need of adding them to the config.
+
+```php
+$avatarDisk = Storage::build([
+    'driver' => 'local',
+    'root' => storage_path('app/avatars'),
+]);
+$avatarDisk->put('user_avatar.jpg', $image);
+```
+
+Tip given by [@wendell_adriel](https://twitter.com/wendell_adriel/)
 
 ### When (NOT) to run "composer update"
 
@@ -122,16 +338,19 @@ echo now()->startOfHour();
 If you want to create a controller with just one action, you can use `__invoke()` method and even create "invokable" controller.
 
 Route:
+
 ```php
-Route::get('user/{id}', 'ShowProfile');
+Route::get('user/{id}', ShowProfile::class);
 ```
 
 Artisan:
+
 ```bash
 php artisan make:controller ShowProfile --invokable
-``` 
+```
 
 Controller:
+
 ```php
 class ShowProfile extends Controller
 {
@@ -149,7 +368,7 @@ class ShowProfile extends Controller
 You can `redirect()` not only to URL or specific route, but to a specific Controller's specific method, and even pass the parameters. Use this:
 
 ```php
-return redirect()->action('SomeController@method', ['param' => $value]);
+return redirect()->action([SomeController::class, 'method'], ['param' => $value]);
 ```
 
 ### Use Older Laravel Version
@@ -160,7 +379,7 @@ If you want to use OLDER version instead of the newest Laravel, use this command
 composer create-project --prefer-dist laravel/laravel project "7.*"
 ```
 
-Change 7.* to whichever version you want.
+Change 7.\* to whichever version you want.
 
 ### Add Parameters to Pagination Links
 
@@ -176,7 +395,7 @@ In default Pagination links, you can pass additional parameters, preserve the or
 
 ### Repeatable Callback Functions
 
-If you have a callback function that you need to re-use multiple times, you can assign it to a variable, and then re-use.﻿
+If you have a callback function that you need to re-use multiple times, you can assign it to a variable, and then re-use.
 
 ```php
 $userCondition = function ($query) {
@@ -190,13 +409,12 @@ $articles = Article::with(['comments' => $userCondition])
     ->get();
 ```
 
-
 ### Request: has any
 
-You can check not only one parameter with `$request->has()` method, but also check for multiple parameters present, with `$request->hasAny()﻿`:
+You can check not only one parameter with `$request->has()` method, but also check for multiple parameters present, with `$request->hasAny() `:
 
 ```php
-public function store(Request $request) 
+public function store(Request $request)
 {
     if ($request->hasAny(['api_key', 'token'])) {
         echo 'We have API key passed';
@@ -211,44 +429,29 @@ public function store(Request $request)
 In pagination, if you want to have just "Previous/next" links instead of all the page numbers (and have fewer DB queries because of that), just change `paginate()` to `simplePaginate()`:
 
 ```php
-// Instead of 
+// Instead of
 $users = User::paginate(10);
 
 // You can do this
 $users = User::simplePaginate(10);
 ```
 
-### Data Get Function
-
-If you have an array complex data structure, for example a nested array with objects. You can use `data_get()` helper function retrieves a value from a nested array or object using "dot" notation and wildcard:
-
-```php
-// We have an array
-[ 
-  0 => 
-	['user_id' =>'some user id', 'created_at' => 'some timestamp', 'product' => {object Product}, etc], 
-  1 =>  
-  	['user_id' =>'some user id', 'created_at' => 'some timestamp', 'product' => {object Product}, etc],  
-  2 =>  etc
-]
-
-// Now we want to get all products ids. We can do like this:
-
-data_get($yourArray,  '*.product.id');
-
-// Now we have all products ids [1, 2, 3, 4, 5, etc...]
-```
-
 ### Blade directive to add true/false conditions
-New in Laravel 8.51: `@class` Blade directive to add true/false conditions on whether some CSS class should be added. Read more in [docs](https://laravel.com/docs/8.x/blade#conditional-classes) <br>
+
+New in Laravel 8.51: `@class` Blade directive to add true/false conditions on whether some CSS class should be added. Read more in [docs](https://laravel.com/docs/8.x/blade#conditional-classes)
+
 Before:
+
 ```php
 <div class="@if ($active) underline @endif">`
 ```
+
 Now:
+
 ```php
 <div @class(['underline' => $active])>
 ```
+
 ```php
 @php
     $isActive = false;
@@ -268,8 +471,10 @@ Now:
 Tip given by [@Teacoders](https://twitter.com/Teacoders/status/1445417511546023938)
 
 ### Jobs can be used without queues
+
 Jobs are discussed in the "Queues" section of the docs, but you can use Jobs without queues, just as classes to delegate tasks to.
 Just call `$this->dispatchNow()` from Controllers
+
 ```php
 public function approve(Article $article)
 {
@@ -280,8 +485,11 @@ public function approve(Article $article)
 ```
 
 ### Use faker outside factories or seeders
-If you want to generate some fake data, you can use Faker even outside factories or seeds, in any class.<br>
-_Keep in mind: to use it in __production__, you need to move faker from `"require-dev"` to `"require"` in `composer.json`_
+
+If you want to generate some fake data, you can use Faker even outside factories or seeds, in any class.
+
+_Keep in mind: to use it in **production**, you need to move faker from `"require-dev"` to `"require"` in `composer.json`_
+
 ```php
 use Faker;
 
@@ -296,16 +504,21 @@ class WhateverController extends Controller
 ```
 
 ### Schedule things
-You can schedule things to run daily/hourly in a lot of different structures.<br>
+
+You can schedule things to run daily/hourly in a lot of different structures.
+
 You can schedule an artisan command, a Job class, an invokable class, a callback function, and even execute a shell script.
+
 ```php
 use App\Jobs\Heartbeat;
 
 $schedule->job(new Heartbeat)->everyFiveMinutes();
 ```
+
 ```php
 $schedule->exec('node /home/forge/script.js')->daily();
 ```
+
 ```php
 use App\Console\Commands\SendEmailsCommand;
 
@@ -313,6 +526,7 @@ $schedule->command('emails:send Taylor --force')->daily();
 
 $schedule->command(SendEmailsCommand::class, ['Taylor', '--force'])->daily();
 ```
+
 ```php
 protected function schedule(Schedule $schedule)
 {
@@ -323,20 +537,27 @@ protected function schedule(Schedule $schedule)
 ```
 
 ### Search Laravel docs
-If you want to search Laravel Docs for some keyword, by default it gives you only the TOP 5 results. Maybe there are more?<br>
-If you want to see ALL results, you may go to the Github Laravel docs repository and search there directly. https://github.com/laravel/docs
+
+If you want to search Laravel Docs for some keyword, by default it gives you only the TOP 5 results. Maybe there are more?
+
+If you want to see ALL results, you may go to the GitHub Laravel docs repository and search there directly. https://github.com/laravel/docs
 
 ### Filter route:list
-New in Laravel 8.34: `php artisan route:list` gets additional flag `--except-path`, so you would filter out the routes you don't want to see. [See original PR](New in Laravel 8.34: `php artisan route:list` gets additional flag `--except-path`, so you would filter out the routes you don't want to see. [See original PR](https://github.com/laravel/framework/pull/36619)
+
+New in Laravel 8.34: `php artisan route:list` gets additional flag `--except-path`, so you would filter out the routes you don't want to see. [See original PR](https://github.com/laravel/framework/pull/36619)
 
 ### Blade directive for not repeating yourself
-If you keep doing the same formatting of the data in multiple Blade files, you may create your own Blade directive.<br>
+
+If you keep doing the same formatting of the data in multiple Blade files, you may create your own Blade directive.
+
 Here's an example of money amount formatting using the method from Laravel Cashier.
+
 ```php
 "require": {
         "laravel/cashier": "^12.9",
 }
 ```
+
 ```php
 public function boot()
 {
@@ -345,6 +566,7 @@ public function boot()
     });
 }
 ```
+
 ```php
 <div>Price: @money($book->price)</div>
 @if($book->discount_price)
@@ -353,9 +575,11 @@ public function boot()
 ```
 
 ### Artisan commands help
+
 If you are not sure about the parameters of some Artisan command, or you want to know what parameters are available, just type `php artisan help [a command you want]`.
 
 ### Disable lazy loading when running your tests
+
 If you don't want to prevent lazy loading when running your tests you can disable it
 
 ```php
@@ -365,8 +589,11 @@ Model::preventLazyLoading(!$this->app->isProduction() && !$this->app->runningUni
 Tip given by [@djgeisi](https://twitter.com/djgeisi/status/1435538167290073090)
 
 ### Using two amazing helpers in Laravel will bring magic results
-Using two amazing helpers in Laravel will bring magic results...<br>
+
+Using two amazing helpers in Laravel will bring magic results...
+
 In this case, the service will be called and retried (retry). If it stills failing, it will be reported, but the request won't fail (rescue)
+
 ```php
 rescue(function () {
     retry(5, function () {
@@ -378,7 +605,9 @@ rescue(function () {
 Tip given by [@JuanDMeGon](https://twitter.com/JuanDMeGon/status/1435466660467683328)
 
 ### Request parameter default value
+
 Here we are checking if there is a per_page (or any other parameter) value then we will use it, otherwise, we will use a default one.
+
 ```php
 // Isteand of this
 $perPage = request()->per_page ? request()->per_page : 20;
@@ -390,6 +619,7 @@ $perPage = request('per_page', 20);
 Tip given by [@devThaer](https://twitter.com/devThaer/status/1437521022631165957)
 
 ### Pass middleware directly into the route without register it
+
 ```php
 Route::get('posts', PostController::class)
     ->middleware(['auth', CustomMiddleware::class])
@@ -398,6 +628,7 @@ Route::get('posts', PostController::class)
 Tip given by [@sky_0xs](https://twitter.com/sky_0xs/status/1438258486815690766)
 
 ### Transforming an array to CssClasses
+
 ```php
 use Illuminate\Support\Arr;
 
@@ -416,7 +647,9 @@ $classes = Arr::toCssClasses($array);
 Tip given by [@dietsedev](https://twitter.com/dietsedev/status/1438550428833271808)
 
 ### "upcomingInvoice" method in Laravel Cashier (Stripe)
-You can show how much a customer will pay in the next billing cycle.<br>
+
+You can show how much a customer will pay in the next billing cycle.
+
 There is a "upcomingInvoice" method in Laravel Cashier (Stripe) to get the upcoming invoice details.
 
 ```php
@@ -428,13 +661,14 @@ Route::get('/profile/invoices', function (Request $request) {
 });
 ```
 
-Tip given by [@oliverds_](https://twitter.com/oliverds_/status/1439997820228890626)
+Tip given by [@oliverds\_](https://twitter.com/oliverds_/status/1439997820228890626)
 
 ### Laravel Request exists() vs has()
+
 ```php
 // https://example.com?popular
 $request->exists('popular') // true
-$request->has('popular') // false 
+$request->has('popular') // false
 
 // https://example.com?popular=foo
 $request->exists('popular') // true
@@ -444,6 +678,7 @@ $request->has('popular') // true
 Tip given by [@coderahuljat](https://twitter.com/coderahuljat/status/1442191143244951552)
 
 ### There are multiple ways to return a view with variables
+
 ```php
 // First way ->with()
 return view('index')
@@ -468,6 +703,7 @@ return view('index', compact('projects', 'tasks'));
 ```
 
 ### Schedule regular shell commands
+
 We can schedule regular shell commands within Laravel scheduled command
 
 ```php
@@ -475,9 +711,9 @@ We can schedule regular shell commands within Laravel scheduled command
 
 class Kernel extends ConsoleKernel
 {
-    protected function shedule(Schedule $shedule)
+    protected function schedule(Schedule $schedule)
     {
-        $shedule->exec('node /home/forge/script.js')->daily();
+        $schedule->exec('node /home/forge/script.js')->daily();
     }
 }
 ```
@@ -485,6 +721,7 @@ class Kernel extends ConsoleKernel
 Tip given by [@anwar_nairi](https://twitter.com/anwar_nairi/status/1448985254794915845)
 
 ### HTTP client request without verifying
+
 Sometimes, you may want to send HTTP request without verifying SSL in your local environment, you can do like so:
 
 ```php
@@ -502,7 +739,8 @@ return Http::withOptions([
 
 Tip given by [@raditzfarhan](https://github.com/raditzfarhan)
 
-### Test that doesn't assert anything 
+### Test that doesn't assert anything
+
 Test that doesn't assert anything, just launch something which may or may not throw an exception
 
 ```php
@@ -512,14 +750,15 @@ class MigrationsTest extends TestCase
     {
         // We just test if the migrations succeeds or throws an exception
         $this->expectNotToPerformAssertions();
-        
-        
-       Artisan::call('migrate:fresh', ['--path' => '/databse/migrations/task1']);
+
+
+       Artisan::call('migrate:fresh', ['--path' => '/database/migrations/task1']);
     }
 }
 ```
 
 ### "Str::mask()" method
+
 Laravel 8.69 released with "Str::mask()" method which masks a portion of string with a repeated character
 
 ```php
@@ -528,12 +767,12 @@ class PasswordResetLinkController extends Controller
     public function sendResetLinkResponse(Request $request)
     {
         $userEmail = User::where('email', $request->email)->value('email'); // username@domain.com
-        
+
         $maskedEmail = Str::mask($userEmail, '*', 4); // user***************
-        
+
         // If needed, you provide a negative number as the third argument to the mask method,
         // which will instruct the method to begin masking at the given distance from the end of the string
-        
+
         $maskedEmail = Str::mask($userEmail, '*', -16, 6); // use******domain.com
     }
 }
@@ -542,7 +781,9 @@ class PasswordResetLinkController extends Controller
 Tip given by [@Teacoders](https://twitter.com/Teacoders/status/1457029765634744322)
 
 ### Extending Laravel classes
-There is a method called macro on a lot of built-in Laravel classes. For example Collection, Str, Arr, Request, Cache, File, and so on.<br>
+
+There is a method called macro on a lot of built-in Laravel classes. For example Collection, Str, Arr, Request, Cache, File, and so on.
+
 You can define your own methods on these classes like this:
 
 ```php
@@ -557,6 +798,7 @@ Str::lowerSnake('MyString');
 Tip given by [@mmartin_joo](https://twitter.com/mmartin_joo/status/1457635252466298885)
 
 ### Can feature
+
 If you are running Laravel `v8.70`, you can chain `can()` method directly instead of `middleware('can:..')`
 
 ```php
@@ -576,7 +818,8 @@ Route::get('users/{user}/edit', function (User $user) {
 Tip given by [@sky_0xs](https://twitter.com/sky_0xs/status/1458179766192853001)
 
 ### Temporary download URLs
-You can use temporary download URLs for your cloud storage resources to prevent unwanted access. For example, when a user wants to download a file, we redirect to an s3 resource but have the URL expire in 5 seconds.
+
+You can use temporary download URLs for your cloud storage resources to prevent unwanted access. For example, when a user wants to download a file, we redirect to a s3 resource but have the URL expire in 5 seconds.
 
 ```php
 public function download(File $file)
@@ -587,31 +830,43 @@ public function download(File $file)
     );
 }
 ```
+
 Tip given by [@Philo01](https://twitter.com/Philo01/status/1458791323889197064)
 
 ### Dealing with deeply-nested arrays
-Dealing with deeply-nested arrays can result in missing key / value exceptions. Fortunately, Laravel's data_get() helper makes this easy to avoid. It also supports deeply-nested objects.<br><br>
 
-Deeply-nested arrays are a nightmare when they may be missing properties that you need.<br>
+If you have a complex array, you can use `data_get()` helper function to retrieve a value from a nested array using "dot" notation and wildcard.
+
+```php
+$data = [
+  0 => ['user_id' => 1, 'created_at' => 'timestamp', 'product' => {object Product}],
+  1 => ['user_id' => 2, 'created_at' => 'timestamp', 'product' => {object Product}],
+  2 => etc
+];
+
+// Now we want to get all products ids. We can do like this:
+
+data_get($data, '*.product.id');
+
+// Now we have all products ids [1, 2, 3, 4, 5, etc...]
+```
+
 In the example below, if either `request`, `user` or `name` are missing then you'll get errors.
-```php
-$value = $payload['request']['user']['name']
-```
 
-Instead, use the `data_get()` helper to access a deeply-nested array item using dot notation.
 ```php
-$value = data_get($payload, 'request.user.name');
-```
+$value = $payload['request']['user']['name'];
 
-We can also avoid any errors caused by missing properties by supplying a default value.
-```php
-$value = data_get($payload, 'request.user.name', 'John');
+// The data_get function accepts a default value, which will be returned if the specified key is not found.
+
+$value = data_get($payload, 'request.user.name', 'John')
 ```
 
 Tip given by [@mattkingshott](https://twitter.com/mattkingshott/status/1460970984568094722)
 
 ### Customize how your exceptions are rendered
-You can customize how your exceptions are rendered by adding a 'render' method to your exception.<br>
+
+You can customize how your exceptions are rendered by adding a 'render' method to your exception.
+
 For example, this allows you to return JSON instead of a Blade view when the request expects JSON.
 
 ```php
@@ -628,7 +883,7 @@ abstract class BaseException extends Exception
                 ],
             ], $this->getCode());
         }
-        
+
         return response()->view('errors.' . $this->getCode(), ['exception' => $this], $this->getCode());
     }
 }
@@ -646,7 +901,9 @@ class LicenseExpiredException extends BaseException
 Tip given by [@Philo01](https://twitter.com/Philo01/status/1461331239240192003/)
 
 ### The tap helper
+
 The `tap` helper is a great way to remove a separate return statement after calling a method on an object. Makes things nice and clean
+
 ```php
 // without tap
 $user->update(['name' => 'John Doe']);
@@ -660,7 +917,9 @@ return tap($user)->update(['name' => 'John Doe']);
 Tip given by [@mattkingshott](https://twitter.com/mattkingshott/status/1462058149314183171)
 
 ### Reset all of the remaining time units
+
 You can insert an exclamation into the `DateTime::createFromFormat` method to reset all of the remaining time units
+
 ```php
 // 2021-10-12 21:48:07.0
 DateTime::createFromFormat('Y-m-d', '2021-10-12');
@@ -668,14 +927,16 @@ DateTime::createFromFormat('Y-m-d', '2021-10-12');
 // 2021-10-12 00:00:00.0
 DateTime::createFromFormat('!Y-m-d', '2021-10-12');
 
-2021-10-12 21:00:00.0
+// 2021-10-12 21:00:00.0
 DateTime::createFromFormat('!Y-m-d H', '2021-10-12');
 ```
 
 Tip given by [@SteveTheBauman](https://twitter.com/SteveTheBauman/status/1448045021006082054)
 
 ### Scheduled commands in the console kernel can automatically email their output if something goes wrong
+
 Did you know that any commands you schedule in the console kernel can automatically email their output if something goes wrong
+
 ```php
 $schedule
     ->command(PruneOrganizationsCOmmand::class)
@@ -686,6 +947,7 @@ $schedule
 Tip given by [@mattkingshott](https://twitter.com/mattkingshott/status/1463160409905455104)
 
 ### Be careful when constructing your custom filtered queries using GET parameters
+
 ```php
 if (request()->has('since')) {
     // example.org/?since=
@@ -707,7 +969,9 @@ if (request()->filled('key')) {
 Tip given by [@mc0de](https://twitter.com/mc0de/status/1465209203472146434)
 
 ### Dust out your bloated route file
+
 Dust out your bloated route file and split it up to keep things organized
+
 ```php
 class RouteServiceProvider extends ServiceProvider
 {
@@ -718,15 +982,15 @@ class RouteServiceProvider extends ServiceProvider
                 ->middleware('api')
                 ->namespace($this->namespace)
                 ->group(base_path('routes/api.php'));
-                
+
             Route::prefix('webhooks')
                 ->namespace($this->namespace)
                 ->group(base_path('routes/webhooks.php'));
-    
+
             Route::middleware('web')
                 ->namespace($this->namespace)
                 ->group(base_path('routes/web.php'));
-                
+
             if ($this->app->environment('local')) {
                 Route::middleware('web')
                     ->namespace($this->namespace)
@@ -740,6 +1004,7 @@ class RouteServiceProvider extends ServiceProvider
 Tip given by [@Philo01](https://twitter.com/Philo01/status/1466068376330153984)
 
 ### You can send e-mails to a custom log file
+
 In Laravel you can send e-mails to a custom log file.
 
 You can set your environment variables like this:
@@ -750,6 +1015,7 @@ MAIL_LOG_CHANNEL=mail
 ```
 
 And also configure your log channel:
+
 ```php
 'mail' => [
     'driver' => 'single',
@@ -758,18 +1024,22 @@ And also configure your log channel:
 ],
 ```
 
-Now you have all your e-mails in /logs/mails.log<br>
+Now you have all your e-mails in /logs/mails.log
+
 It's a good use case to quickly test your mails.
 
 Tip given by [@mmartin_joo](https://twitter.com/mmartin_joo/status/1466362508571131904)
 
 ### Markdown made easy
+
 Laravel provides an interface to convert markdown in HTML out of the box, without the need to install new composer packages.
+
 ```php
 $html = Str::markdown('# Changelogfy')
 ```
 
 Output:
+
 ```
 <h1>Changelogfy</h1>
 ```
@@ -777,7 +1047,9 @@ Output:
 Tip given by [@paulocastellano](https://twitter.com/paulocastellano/status/1467478502400315394)
 
 ### Simplify if on a request with whenFilled() helper
-We often write if statements to check if a value is present on a request or not.<br>
+
+We often write if statements to check if a value is present on a request or not.
+
 You can simplify it with the `whenFilled()` helper.
 
 ```php
@@ -794,7 +1066,9 @@ public function store(Request $request)
 Tip given by [@mmartin_joo](https://twitter.com/mmartin_joo/status/1467886802711293959)
 
 ### Pass arguments to middleware
+
 You can pass arguments to your middleware for specific routes by appending ':' followed by the value. For example, I'm enforcing different authentication methods based on the route using a single middleware.
+
 ```php
 Route::get('...')->middleware('auth.license');
 Route::get('...')->middleware('auth.license:bearer');
@@ -811,7 +1085,7 @@ class VerifyLicense
             'bearer' => $request->bearerToken(),
             default  => $request->get('key')
         };
-        
+
         // Verify license and return response based on the authentication type
     }
 }
@@ -820,6 +1094,7 @@ class VerifyLicense
 Tip given by [@Philo01](https://twitter.com/Philo01/status/1471864630486179840)
 
 ### Get value from session and forget
+
 If you need to grab something from the Laravel session, then forget it immediately, consider using `session()->pull($value)`. It completes both steps for you.
 
 ```php
@@ -837,12 +1112,17 @@ return redirect(session()->pull('before-github-redirect', '/components'))
 Tip given by [@jasonlbeggs](https://twitter.com/jasonlbeggs/status/1471905631619715077)
 
 ### $request->date() method
-New in this week's Laravel v8.77: `$request->date()` method.<br>
-Now you don't need to call Carbon manually, you can do something like: `$post->publish_at = $request->date('publish_at')->addHour()->startOfHour();`<br>
+
+New in this week's Laravel v8.77: `$request->date()` method.
+
+Now you don't need to call Carbon manually, you can do something like: `$post->publish_at = $request->date('publish_at')->addHour()->startOfHour();`
+
 [Link to full pr](https://github.com/laravel/framework/pull/39945) by [@DarkGhostHunter](https://twitter.com/DarkGhostHunter)
 
 ### Use through instead of map when using pagination
+
 When you want to map paginated data and return only a subset of the fields, use `through` rather than `map`. The `map` breaks the pagination object and changes it's identity. While, `through` works on the paginated data itself
+
 ```php
 // Don't: Mapping paginated data
 $employees = Employee::paginate(10)->map(fn ($employee) => [
@@ -860,10 +1140,12 @@ $employees = Employee::paginate(10)->through(fn ($employee) => [
 Tip given by [@bhaidar](https://twitter.com/bhaidar/status/1475073910383120399)
 
 ### Quickly add a bearer token to HTTP request
+
 There’s a `withToken` method to attach the `Authorization` header to a request.
+
 ```php
 // Booo!
-Http::withHreader([
+Http::withHeader([
     'Authorization' => 'Bearer dQw4w9WgXcq'
 ])
 
@@ -874,7 +1156,9 @@ Http::withToken('dQw4w9WgXcq');
 Tip given by [@p3ym4n](https://twitter.com/p3ym4n/status/1487809735663489024)
 
 ### Copy file or all files from a folder
+
 You can use the `readStream` and `writeStream` to copy a file (or all files from a folder) from one disk to another keeping the memory usage low.
+
 ```php
 // List all the files from a folder
 $files = Storage::disk('origin')->allFiles('/from-folder-name');
@@ -899,6 +1183,7 @@ foreach ($files as $file) {
 Tip given by [@alanrezende](https://twitter.com/alanrezende/status/1488194257567498243)
 
 ### Sessions has() vs exists() vs missing()
+
 Do you know about `has`, `exists` and `missing` methods in Laravel session?
 
 ```php
@@ -915,7 +1200,9 @@ $request->session()->missing('key');
 Tip given by [@iamharis010](https://twitter.com/iamharis010/status/1489086240729145344)
 
 ### Test that you are passing the correct data to a view
+
 Need to test that you are passing the correct data to a view? You can use the viewData method on your response. Here are some examples:
+
 ```php
 /** @test */
 public function it_has_the_correct_value()
@@ -945,7 +1232,9 @@ public function it_returns_the_correct_amount_of_records()
 Tip given by [@JuanRangelTX](https://twitter.com/JuanRangelTX/status/1489944361580351490)
 
 ### Use Redis to track page views
+
 Tracking something like page views with MySQL can be quite a performance hit when dealing with high traffic. Redis is much better at this. You can use Redis and a scheduled command to keep MySQL in sync on a fixed interval.
+
 ```php
 Route::get('{project:slug', function (Project $project) {
     // Instead of $project->increment('views') we use Redis
@@ -986,6 +1275,7 @@ Tip given by [@Philo01](https://twitter.com/JackEllis/status/1491909483496411140
 ### to_route() helper function
 
 Laravel 9 provides shorter version of `response()->route()`, take a look on the following code:
+
 ```php
 // Old way
 Route::get('redirectRoute', function() {
@@ -999,7 +1289,237 @@ Route::get('redirectRoute', function() {
 
 ```
 
-This helper work in the same way as `redirect()->route('home')`, but it is more concise than a old way.
+This helper work in the same way as `redirect()->route('home')`, but it is more concise than an old way.
 
 Tip given by [@CatS0up](https://github.com/CatS0up)
+
+### Pause a long running job when queue worker shuts down
+
+When running a long job, if your queue worker gets shutdown by
+
+- Stopping the worker.
+- Sending signal **SIGTERM** (**SIGINT** for Horizon).
+- Pressing `CTRL + C` (Linux/Windows).
+
+Then the job process may get corrupted while it is doing something.
+
+By checking with `app('queue.worker')->shouldQuit`, we can determine if the worker is shutting down. This way, we can save the current process and requeue the job so that when the queue worker runs again, it can resume from where it left.
+
+This is very useful in the Containerized world (Kubernetes, Docker etc.) where the container gets destroyed and re-created anytime.
+
+```php
+<?php
+
+namespace App\Jobs;
+
+use App\Models\User;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+
+class MyLongJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $timeout = 3600;
+
+    private const CACHE_KEY = 'user.last-process-id';
+
+    public function handle()
+    {
+        $processedUserId = Cache::get(self::CACHE_KEY, 0); // Get last processed item id
+        $maxId = Users::max('id');
+
+        if ($processedUserId >= $maxId) {
+            Log::info("All users have already been processed!");
+            return;
+        }
+
+        while ($user = User::where('id', '>', $processedUserId)->first()) {
+            Log::info("Processing User ID: {$user->id}");
+
+            // Your long work here to process user
+            // Ex. Calling Billing API, Preparing Invoice for User etc.
+
+            $processedUserId = $user->id;
+            Cache::put(self::CACHE_KEY, $processedUserId, now()->addSeconds(3600)); // Updating last processed item id
+
+            if (app('queue.worker')->shouldQuit) {
+                $this->job->release(60); // Requeue the job with delay of 60 seconds
+                break;
+            }
+        }
+
+        Log::info("All users have processed successfully!");
+    }
+}
+```
+
+Tip given by [@a-h-abid](https://github.com/a-h-abid)
+
+### Freezing Time in Laravel Tests
+
+In your Laravel tests, you might sometimes need to freeze the time.
+
+This is particularly useful if you're trying to make assertions based on timestamps or need to make queries based on dates and/or times.
+
+```php
+// To freeze the time, you used to be able to write this at the time top of your tests:
+Carbon::setTestNow(Carbon::now());
+// You could also use the "travelTo" method:
+$this->travelTo(Carbon::now());
+// You can now use the new "freezeTime" method to keep your code readable and obvious:
+$this->freezeTime();
+```
+
+Tip given by [@AshAllenDesign](https://twitter.com/AshAllenDesign/status/1509115721183158272)
+
+### New squish helper
+
+New in Laravel from 9.7 `squish` helper.
+
+```php
+$result = Str::squish(' Hello   John,         how   are   you?    ');
+// Hello John, how are you?
+```
+
+Tip given by [@mattkingshott](https://twitter.com/mattkingshott/status/1511718052752150534)
+
+### Specify what to do if a scheduled task fails or succeeds
+
+You can specify what to do if a scheduled task fails or succeeds.
+
+```php
+$schedule->command('emails:send')
+        ->daily()
+        ->onSuccess(function () {
+            // The task succeeded
+        })
+        ->onFailure(function () {
+            // The task failed
+        });
+```
+
+Tip given by [@cosmeescobedo](https://twitter.com/cosmeescobedo/status/1513221529072414720)
+
+### Scheduled command on specific environments
+
+Running Laravel scheduled command on specific environments.
+
+```php
+// Not good
+if (app()->environment('production', 'staging')) {
+    $schedule->command('emails:send')
+        ->daily();
+}
+// Better
+$schedule->command('emails:send')
+        ->daily()
+        ->onEnvironment(['production', 'staging']);
+```
+
+Tip given by [@nguyenduy4994](https://twitter.com/nguyenduy4994/status/1516960273000587265)
+
+### Add conditionable behavior to your own classes
+
+You can use the [Conditionable Trait](https://laravel.com/api/9.x/Illuminate/Support/Traits/Conditionable.html) to avoid using `if/else` and promote method chaining.
+
+```php
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Traits\Conditionable;
+
+class MyService
+{
+    use Conditionable;
+
+    // ...
+}
+```
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\MyRequest;
+use App\Services\MyService;
+
+class MyController extends Controller
+{
+    public function __invoke(MyRequest $request, MyService $service)
+    {
+        // Not good
+        $service->addParam($request->param);
+
+        if ($request->has('something')) {
+            $service->methodToBeCalled();
+        }
+
+        $service->execute();
+        // ---
+
+        // Better
+        $service->addParam($request->param)
+            ->when($request->has('something'), fn ($service) => $service->methodToBeCalled())
+            ->execute();
+        // ---
+
+        // ...
+    }
+}
+```
+
+### Perform Action when Job has failed
+
+In some cases, we want to perform some action when job has failed. For example, send an email or a notification.
+
+For this purpose, we can use `failed()` method in the job class, just like the `handle()` method:
+
+```php
+namespace App\Jobs\Invoice;
+use Illuminate\Bus\Batchable;
+use Illuminate\Bus\Queueable;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Throwable;
+
+class CalculateSingleConsignment implements ShouldQueue
+{
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    // ... __construct() method, handle() method, etc.
+
+    public function failed(Throwable $exception)
+    {
+        // Perform any action here when job has failed
+     }
+}
+```
+
+Tip given by [@pauloimon](https://github.com/pauloimon)
+
+
+### Ignore Database when Job has failed
+
+If you ever need to bypass database when a job fails, you can do one of the below things to skip database:
+- Set env `QUEUE_FAILED_DRIVER` with value `null`. Works from Laravel 8 and above.
+- Set the `failed` value to `null` in `config/queue.php` file, replacing the array (like below code). This one works for Laravel 7 and older.
+
+```php
+    'failed' => null,
+```
+
+Why you would want this? For applications where you do not need to store failed jobs and they needs to have very high TPS, skipping database can be very favourable as we are not hitting database, saving times & prevent database going down.
+
+Tip given by [@a-h-abid](https://github.com/a-h-abid)
 
